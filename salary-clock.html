@@ -1,0 +1,708 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Счётчик заработка</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&family=Unbounded:wght@300;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --surface: #111118;
+    --card: #16161f;
+    --border: #2a2a3a;
+    --accent: #00e5a0;
+    --accent2: #00b37a;
+    --text: #e8e8f0;
+    --muted: #5a5a72;
+    --danger: #ff4466;
+    --glow: rgba(0, 229, 160, 0.15);
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Space Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    overflow-x: hidden;
+    padding: 20px;
+  }
+
+  /* Background grid */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(0,229,160,0.03) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(0,229,160,0.03) 1px, transparent 1px);
+    background-size: 40px 40px;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .container {
+    position: relative;
+    z-index: 1;
+    width: 100%;
+    max-width: 560px;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+  }
+
+  /* Header */
+  .header {
+    text-align: center;
+  }
+
+  .header h1 {
+    font-family: 'Unbounded', sans-serif;
+    font-weight: 300;
+    font-size: clamp(14px, 3vw, 16px);
+    letter-spacing: 0.25em;
+    text-transform: uppercase;
+    color: var(--accent);
+    opacity: 0.8;
+  }
+
+  /* Input card */
+  .input-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 28px 32px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    transition: border-color 0.3s;
+  }
+
+  .input-card.disabled-card {
+    opacity: 0.5;
+    pointer-events: none;
+  }
+
+  .input-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    padding: 0 16px;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+
+  .input-row:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px var(--glow);
+  }
+
+  .currency {
+    font-family: 'Unbounded', sans-serif;
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .input-row input {
+    background: none;
+    border: none;
+    outline: none;
+    font-family: 'Space Mono', monospace;
+    font-size: 28px;
+    font-weight: 700;
+    color: var(--text);
+    width: 100%;
+    padding: 14px 0;
+    -moz-appearance: textfield;
+  }
+
+  .input-row input::placeholder { color: var(--muted); }
+  .input-row input::-webkit-outer-spin-button,
+  .input-row input::-webkit-inner-spin-button { -webkit-appearance: none; }
+
+  .per-hour {
+    font-size: 10px;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--muted);
+    flex-shrink: 0;
+  }
+
+  /* Main display */
+  .display-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 40px 32px 32px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .display-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--accent), transparent);
+    opacity: 0;
+    transition: opacity 0.4s;
+  }
+
+  .display-card.running::before { opacity: 1; }
+
+  /* Пульсирующий индикатор */
+  .status-dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: var(--muted);
+    position: absolute;
+    top: 20px; right: 20px;
+    transition: background 0.3s;
+  }
+
+  .display-card.running .status-dot {
+    background: var(--accent);
+    animation: pulse 1.2s ease-in-out infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(0.7); }
+  }
+
+  .time-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    align-self: flex-start;
+  }
+
+  .time-display {
+    font-family: 'Space Mono', monospace;
+    font-size: clamp(42px, 10vw, 64px);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    color: var(--text);
+    width: 100%;
+    text-align: left;
+    line-height: 1;
+    transition: color 0.3s;
+  }
+
+  .display-card.running .time-display { color: var(--text); }
+
+  .divider {
+    width: 100%;
+    height: 1px;
+    background: var(--border);
+    margin: 8px 0;
+  }
+
+  .earned-label {
+    font-size: 10px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    align-self: flex-start;
+  }
+
+  .earned-display {
+    font-family: 'Unbounded', sans-serif;
+    font-size: clamp(36px, 9vw, 56px);
+    font-weight: 600;
+    color: var(--accent);
+    width: 100%;
+    text-align: left;
+    line-height: 1;
+    text-shadow: 0 0 40px rgba(0,229,160,0.3);
+    transition: text-shadow 0.3s;
+    word-break: break-all;
+  }
+
+  .display-card.running .earned-display {
+    text-shadow: 0 0 60px rgba(0,229,160,0.5);
+    animation: glow-pulse 2s ease-in-out infinite;
+  }
+
+  @keyframes glow-pulse {
+    0%, 100% { text-shadow: 0 0 40px rgba(0,229,160,0.4); }
+    50% { text-shadow: 0 0 80px rgba(0,229,160,0.7); }
+  }
+
+  .earned-sub {
+    font-size: 11px;
+    letter-spacing: 0.1em;
+    color: var(--muted);
+    align-self: flex-start;
+    margin-top: 4px;
+    height: 16px;
+    transition: opacity 0.3s;
+  }
+
+  /* Buttons */
+  .controls {
+    display: flex;
+    gap: 12px;
+  }
+
+  .btn {
+    flex: 1;
+    padding: 16px;
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-family: 'Space Mono', monospace;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: all 0.2s;
+    background: var(--card);
+    color: var(--muted);
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--glow);
+  }
+
+  .btn:active { transform: scale(0.98); }
+
+  .btn.primary {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #000;
+    font-weight: 700;
+  }
+
+  .btn.primary:hover {
+    background: #00ffb3;
+    border-color: #00ffb3;
+    color: #000;
+    box-shadow: 0 0 30px rgba(0,229,160,0.4);
+  }
+
+  .btn.stop {
+    border-color: var(--danger);
+    color: var(--danger);
+    background: rgba(255,68,102,0.05);
+  }
+
+  .btn.stop:hover {
+    background: rgba(255,68,102,0.12);
+    box-shadow: 0 0 20px rgba(255,68,102,0.2);
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  /* Stats row */
+  .stats {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+  }
+
+  .stat-card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 16px 20px;
+  }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin-bottom: 6px;
+  }
+
+  .stat-value {
+    font-family: 'Space Mono', monospace;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Lap log */
+  .log-section {
+    display: none;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .log-section.visible { display: flex; }
+
+  .log-header {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 0 4px;
+  }
+
+  .log-list {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    max-height: 160px;
+    overflow-y: auto;
+  }
+
+  .log-list::-webkit-scrollbar { width: 4px; }
+  .log-list::-webkit-scrollbar-track { background: transparent; }
+  .log-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .log-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 16px;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 2px;
+    font-size: 12px;
+    animation: slide-in 0.2s ease;
+  }
+
+  @keyframes slide-in {
+    from { opacity: 0; transform: translateX(-8px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+
+  .log-item .lap-num { color: var(--muted); }
+  .log-item .lap-time { color: var(--text); }
+  .log-item .lap-earned { color: var(--accent); font-weight: 700; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+  <div class="header">
+    <h1>Счётчик заработка</h1>
+  </div>
+
+  <!-- Ввод ЗП -->
+  <div class="input-card" id="inputCard">
+    <div class="input-label">Почасовая ставка</div>
+    <div class="input-row">
+      <span class="currency">₽</span>
+      <input type="number" id="rateInput" placeholder="1500" min="0" step="any">
+      <span class="per-hour">/ ч</span>
+    </div>
+  </div>
+
+  <!-- Основной дисплей -->
+  <div class="display-card" id="displayCard">
+    <div class="status-dot"></div>
+
+    <div class="time-label">Время</div>
+    <div class="time-display" id="timeDisplay">00:00:00</div>
+
+    <div class="divider"></div>
+
+    <div class="earned-label">Заработано</div>
+    <div class="earned-display" id="earnedDisplay">₽ 0.00</div>
+    <div class="earned-sub" id="earnedSub"></div>
+  </div>
+
+  <!-- Кнопки управления -->
+  <div class="controls">
+    <button class="btn primary" id="startBtn" onclick="handleStart()">▶ &nbsp;Старт</button>
+    <button class="btn" id="lapBtn" onclick="handleLap()" disabled>○ &nbsp;Отметка</button>
+    <button class="btn stop" id="stopBtn" onclick="handleStop()" disabled>■ &nbsp;Стоп</button>
+  </div>
+
+  <!-- Мини-статистика -->
+  <div class="stats">
+    <div class="stat-card">
+      <div class="stat-label">В минуту</div>
+      <div class="stat-value" id="perMinDisplay">₽ 0</div>
+    </div>
+    <div class="stat-card">
+      <div class="stat-label">В секунду</div>
+      <div class="stat-value" id="perSecDisplay">₽ 0.00</div>
+    </div>
+  </div>
+
+  <!-- Лог отметок -->
+  <div class="log-section" id="logSection">
+    <div class="log-header">Отметки</div>
+    <div class="log-list" id="logList"></div>
+  </div>
+
+</div>
+
+<script>
+  // ─── Состояние ────────────────────────────────────────────────
+  // Ключевая идея: храним абсолютный timestamp запуска (wallclock).
+  // Когда страница переоткрывается — Date.now() - savedStartAt + savedElapsed
+  // даёт точное накопленное время, даже если браузер был закрыт несколько часов.
+
+  const STORE_KEY = 'salaryclock_v1';
+
+  let startAt       = null;  // Date.now() в момент последнего Resume
+  let elapsed       = 0;     // мс накоплено до текущего запуска
+  let isRunning     = false;
+  let timerInterval = null;
+  let lapCount      = 0;
+  let lastLapElapsed = 0;
+  let laps          = [];    // [{num, lapMs, lapEarned}]
+
+  // ─── DOM ──────────────────────────────────────────────────────
+  const rateInput     = document.getElementById('rateInput');
+  const timeDisplay   = document.getElementById('timeDisplay');
+  const earnedDisplay = document.getElementById('earnedDisplay');
+  const earnedSub     = document.getElementById('earnedSub');
+  const perMinDisplay = document.getElementById('perMinDisplay');
+  const perSecDisplay = document.getElementById('perSecDisplay');
+  const displayCard   = document.getElementById('displayCard');
+  const inputCard     = document.getElementById('inputCard');
+  const startBtn      = document.getElementById('startBtn');
+  const lapBtn        = document.getElementById('lapBtn');
+  const stopBtn       = document.getElementById('stopBtn');
+  const logSection    = document.getElementById('logSection');
+  const logList       = document.getElementById('logList');
+
+  // ─── Утилиты ──────────────────────────────────────────────────
+  function getRate() { return parseFloat(rateInput.value) || 0; }
+
+  function formatTime(ms) {
+    const totalSec = Math.floor(ms / 1000);
+    const h = Math.floor(totalSec / 3600);
+    const m = Math.floor((totalSec % 3600) / 60);
+    const s = totalSec % 60;
+    return [h, m, s].map(v => String(v).padStart(2, '0')).join(':');
+  }
+
+  function formatMoney(val) {
+    if (val >= 1000000) return '₽ ' + (val / 1000000).toFixed(3) + 'М';
+    if (val >= 1000) return '₽ ' + new Intl.NumberFormat('ru-RU', {
+      minimumFractionDigits: 2, maximumFractionDigits: 2
+    }).format(val);
+    return '₽ ' + val.toFixed(2);
+  }
+
+  function getCurrentElapsed() {
+    if (!isRunning) return elapsed;
+    return elapsed + (Date.now() - startAt);
+  }
+
+  // ─── Persistence ──────────────────────────────────────────────
+  function saveState() {
+    const state = {
+      rate:           rateInput.value,
+      elapsed:        elapsed,
+      startAt:        isRunning ? startAt : null,  // null = на паузе
+      lapCount:       lapCount,
+      lastLapElapsed: lastLapElapsed,
+      laps:           laps,
+    };
+    localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  }
+
+  function clearState() {
+    localStorage.removeItem(STORE_KEY);
+  }
+
+  function loadState() {
+    try {
+      const raw = localStorage.getItem(STORE_KEY);
+      if (!raw) return;
+      const s = JSON.parse(raw);
+
+      // Восстанавливаем ставку
+      if (s.rate) rateInput.value = s.rate;
+
+      lapCount        = s.lapCount       || 0;
+      lastLapElapsed  = s.lastLapElapsed || 0;
+      laps            = s.laps           || [];
+
+      if (s.startAt) {
+        // Таймер был запущен — считаем сколько прошло пока нас не было
+        elapsed   = (s.elapsed || 0) + (Date.now() - s.startAt);
+        startAt   = Date.now();
+        isRunning = true;
+        startTimer();
+        setRunningUI();
+      } else if (s.elapsed > 0) {
+        // Был на паузе
+        elapsed = s.elapsed;
+        setPausedUI();
+      }
+
+      // Восстанавливаем лог отметок
+      if (laps.length > 0) {
+        laps.forEach(lap => renderLapItem(lap, false)); // false = без анимации
+        logSection.classList.add('visible');
+      }
+    } catch(e) {
+      clearState();
+    }
+  }
+
+  // ─── UI helpers ───────────────────────────────────────────────
+  function setRunningUI() {
+    displayCard.classList.add('running');
+    inputCard.classList.add('disabled-card');
+    startBtn.innerHTML = '⏸ &nbsp;Пауза';
+    startBtn.className = 'btn primary';
+    stopBtn.disabled = false;
+    lapBtn.disabled  = false;
+  }
+
+  function setPausedUI() {
+    displayCard.classList.remove('running');
+    inputCard.classList.remove('disabled-card');
+    startBtn.innerHTML = '▶ &nbsp;Продолжить';
+    startBtn.className = 'btn primary';
+    stopBtn.disabled = false;
+    lapBtn.disabled  = true;
+    tick();
+  }
+
+  function setStoppedUI() {
+    displayCard.classList.remove('running');
+    inputCard.classList.remove('disabled-card');
+    startBtn.innerHTML = '▶ &nbsp;Старт';
+    startBtn.className = 'btn primary';
+    stopBtn.disabled = true;
+    lapBtn.disabled  = true;
+    timeDisplay.textContent   = '00:00:00';
+    earnedDisplay.textContent = '₽ 0.00';
+    earnedSub.textContent     = '';
+  }
+
+  // ─── Tick ─────────────────────────────────────────────────────
+  function tick() {
+    const ms   = getCurrentElapsed();
+    const rate = getRate();
+    const earned = (rate / 3600000) * ms;
+
+    timeDisplay.textContent   = formatTime(ms);
+    earnedDisplay.textContent = formatMoney(earned);
+
+    if (rate > 0) {
+      perMinDisplay.textContent = formatMoney(rate / 60);
+      perSecDisplay.textContent = '₽ ' + (rate / 3600).toFixed(4);
+      earnedSub.textContent     = '+' + (rate / 3600).toFixed(4) + ' ₽/сек';
+    } else {
+      perMinDisplay.textContent = '₽ 0';
+      perSecDisplay.textContent = '₽ 0.00';
+      earnedSub.textContent     = 'Введите ставку ↑';
+    }
+  }
+
+  function startTimer() {
+    clearInterval(timerInterval);
+    timerInterval = setInterval(() => { tick(); saveState(); }, 200);
+    tick();
+  }
+
+  // ─── Кнопки ───────────────────────────────────────────────────
+  function handleStart() {
+    if (isRunning) {
+      // → Пауза
+      elapsed   = getCurrentElapsed();
+      clearInterval(timerInterval);
+      isRunning = false;
+      setPausedUI();
+      saveState();
+    } else {
+      // → Старт / Продолжить
+      startAt   = Date.now();
+      isRunning = true;
+      startTimer();
+      setRunningUI();
+      saveState();
+    }
+  }
+
+  function handleStop() {
+    clearInterval(timerInterval);
+    isRunning       = false;
+    elapsed         = 0;
+    startAt         = null;
+    lapCount        = 0;
+    lastLapElapsed  = 0;
+    laps            = [];
+    logList.innerHTML = '';
+    logSection.classList.remove('visible');
+    setStoppedUI();
+    clearState();
+  }
+
+  function renderLapItem(lap, animate = true) {
+    const item = document.createElement('div');
+    item.className = 'log-item';
+    if (!animate) item.style.animation = 'none';
+    item.innerHTML = `
+      <span class="lap-num">#${String(lap.num).padStart(2, '0')}</span>
+      <span class="lap-time">${formatTime(lap.lapMs)}</span>
+      <span class="lap-earned">${formatMoney(lap.lapEarned)}</span>
+    `;
+    logList.prepend(item);
+  }
+
+  function handleLap() {
+    lapCount++;
+    const ms       = getCurrentElapsed();
+    const rate     = getRate();
+    const lapMs    = ms - lastLapElapsed;
+    const lapEarned = (rate / 3600000) * lapMs;
+    const lap      = { num: lapCount, lapMs, lapEarned };
+
+    laps.push(lap);
+    renderLapItem(lap, true);
+    logSection.classList.add('visible');
+    lastLapElapsed = ms;
+    saveState();
+  }
+
+  // ─── Прочее ───────────────────────────────────────────────────
+  rateInput.addEventListener('input', () => {
+    if (!isRunning) tick();
+    saveState();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.target === rateInput) return;
+    if (e.code === 'Space')  { e.preventDefault(); handleStart(); }
+    if (e.code === 'Escape') { if (!stopBtn.disabled) handleStop(); }
+    if (e.code === 'KeyL')   { if (!lapBtn.disabled) handleLap(); }
+  });
+
+  // ─── Init ─────────────────────────────────────────────────────
+  loadState();
+  if (!isRunning) tick();
+</script>
+</body>
+</html>
